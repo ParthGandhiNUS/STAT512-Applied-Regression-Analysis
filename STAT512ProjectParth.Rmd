@@ -1,0 +1,238 @@
+---
+title: "STAT 512 Project - Parth"
+output: html_document
+date: "2024-11-16"
+---
+
+```{r}
+#Import the relevant libraries
+library(car)
+library(lmtest)
+library(ALSM)
+library(MASS)
+library(leaps)
+library(caret)
+library(lmridge)
+library(fmsb)
+```
+# Steps to obtain CollegeBBData.csv from CBB.csv:
+# 1. Open the CBB.csv dataset in excel. Save this as an excel workbook as "CollegeBBDataExcel.xlsx". 
+# 2. Delete the following columns from CollegeBBDataExcel:
+#      - ADJOE
+#      - ADJDE
+#      - BARTHAG
+#      - EFG_O
+#      - EFG_D
+#      - TOR
+#      - DRB
+#      - FTRD
+#      - 2P_D
+#      - 3P_D
+#      - ADJ_T
+#      - WAB
+#      - POSTSEASON
+#      - SEED
+# 3.Save a csv version of the edited file as "CollegeBBData.csv".
+
+# We will be using bbdata as our dataset.
+      
+```{r}
+#Read the data
+bbdata<-read.csv("CollegeBBData.csv", header =TRUE, sep=",")
+dim(bbdata)
+```
+
+# Data Cleaning
+```{r}
+#Making WinPercent Variable which will be used as the dependent variable. WinPercent refers to the percentage of basketball teams won by a certain team in a certain year.
+
+#Take the ratio of the wins over the total games played.
+bbdata$WinPercent = bbdata$W / bbdata$G
+# Multiply by 100 to make it percentage
+bbdata$WinPercent = bbdata$WinPercent * 100
+
+# Filter out points with a WinPercent above 100. Does not make sense to have more game won than the number of games played.
+bbdata <- bbdata[bbdata$WinPercent <= 100.00, ]
+
+# Add small amount for BoxCox
+bbdata$WinPercent = bbdata$WinPercent + 0.0001
+```
+
+```{r}
+#Map all the variables to follow the convention in the report
+y <- bbdata$WinPercent
+x11 <- bbdata$X2P_O
+x12 <- bbdata$X3P_O
+x8 <- bbdata$ORB
+x9 <- bbdata$TORD
+x5 <- bbdata$FTR
+
+#Make a new dataframe with all the variables
+clgdata <- data.frame(y, x11, x12, x8, x9, x5)
+```
+
+# Data Exploration
+```{r}
+#Histogram of the variables
+hist(y, main = "Histogram of Win Rate (Y)", xlab = "Win Percentage",breaks = 10)
+hist(x11, main = "Histogram of Two-Point Shooting Accuracy (X11)", xlab = "Two-Point Shooting Accuracy",breaks = 10)
+hist(x12, main = "Histogram of Three-Point Shooting Accuracy (X12)", xlab = "Three-Point Shooting Accuracy")
+hist(x8, main = "Histogram of Offensive Rebound Rate(X8)", xlab = "Offensive Rebound Rate",breaks = 10)
+hist(x9, main = "Histogram of Turnover Percentage Committed(Steal Rate) (X9)", xlab = "Turnover Percentage")
+hist(x5, main = "Histogram of Free Throw Rate (X5)", xlab = "Free Throw Rate")
+
+#Box Plot of Variables
+boxplot(clgdata[, c("y", "x11", "x12", "x8", "x9", "x5")], 
+        main = "Boxplot of Variables", # Title
+        ylab = "Win Rate",                        # Y-axis label
+        outline = TRUE,                        # Show outliers
+        las = 0)               
+```
+
+```{r}
+#Make the baseline model - the full model
+full_model<-lm(y~x11+x12+x8+x9+x5, clgdata)
+summary(full_model)
+anova(full_model)
+```
+
+# Diagnostics
+```{r}
+# Calculate the correlation matrix 
+correlation_matrix <- cor(clgdata[, c("y", "x11", "x12", "x8", "x9", "x5")], 
+                          use = "complete.obs", # Excludes missing values
+                          method = "pearson")  # Default method (Pearson correlation)
+
+# Print the correlation matrix
+print(correlation_matrix)
+```
+
+```{r}
+# Obtain the scatter plot
+plot(clgdata)
+```
+```{r}
+# Type 2 ANOVA Table
+Anova(full_model, type="II")
+```
+
+```{r}
+#Check the VIF for model to diagnose for multicollinearity
+library(car)
+car::vif(full_model)
+```
+
+```{r}
+#Obtain the residual plot
+residualPlots(full_model)
+```
+
+
+```{r}
+#BP Test to test for non constant variance
+bptest(full_model)
+# In this case since our p-value 
+```
+
+```{r}
+#Shapiro test for normality
+shapiro.test(residuals(full_model))
+qqnorm(residuals(full_model))
+qqline(residuals(full_model))
+```
+
+```{r}
+# Compute the studentized deleted residuals to determine the outliers in the model
+studentized_residuals <- rstudent(full_model)
+
+# Filter out observations with absolute values greater than 2
+outliers <- which(abs(studentized_residuals) > 2)
+
+studentized_residuals[outliers]
+```
+
+```{r}
+#Checking the DFFITS to detect influential points
+dffits_values <- dffits(full_model)
+dffits_threshold = 2 * sqrt(6/3522) # p = 6 (beta0-beta5), n = 3522
+print(paste("DFFITs Threshold:", dffits_threshold))
+dffits_values[abs(dffits_values) > dffits_threshold]
+```
+
+```{r}
+#Checking the DFBETAS to detect the influential points
+dfbetas_values<-dfbetas(full_model)
+dfbetas_threshold = 2/(sqrt(3522)) # n = 1924
+print(paste("DFBetas Threshold:", dfbetas_threshold))
+dfbetas_values[dfbetas_values > dfbetas_threshold]
+```
+
+```{r}
+#Checking the Cook's Distance Values to detect the influential points
+cooks_values<-cooks.distance(full_model)
+cooks_threshold = qf(0.5, 6, 3516)
+print(paste("Cook's Distance Threshold for major influence points:", cooks_threshold))
+cooks_values[cooks_values > cooks_threshold]
+```
+
+
+#Transformation
+```{r}
+#Box Cox Transformation
+boxcoxplot <- boxcox(full_model, lambda=seq(-3,3, by=0.1))
+lambda <- boxcoxplot$x[which.max(boxcoxplot$y)]
+print(paste("Lambda with greatest log likelihood:", lambda))
+```
+
+#Model Selection
+```{r}
+# "Best" subsets Algorithm
+bs<-BestSub(clgdata[,2:6], clgdata$y, num = 1)
+bs
+```
+
+#Advanced Remedial Methods
+```{r}
+# Weighted Least Squares -- Do not need
+#wts1<-1/fitted(lm(abs(residuals(full_model))~x11+x12+x8+x9+x5, clgdata))^2
+#model_WLS<-lm(y~x11+x12+x8+x9+x5, weight=wts1, data=clgdata)
+#summary(model_WLS)
+```
+
+```{r}
+#Robust Regression to solve the issue of influential points
+robust_model<-rlm(y~x11+x12+x8+x9+x5, data = clgdata, psi=psi.bisquare)
+summary(robust_model)
+model_summary <- summary(robust_model)
+```
+
+#Cross_Validation
+```{r}
+set.seed(123) # Set seed for reproductibility
+train.control<-trainControl(method="cv", number = 10)
+tune.grid <- data.frame(nvmax = 5)
+set.full_model <- train(y~x11+x12+x8+x9+x5, clgdata, method="leapBackward",tuneGrid = tune.grid,trControl=train.control)
+print(set.full_model)
+```
+
+```{r}
+#Make the reduced model with its summary and its anova table
+reduced_model<-lm(y~x11+x12, clgdata)
+summary(reduced_model)
+anova(reduced_model)
+```
+
+```{r}
+#Comparison of the reduced model and the full model
+anova(reduced_model,full_model)
+```
+
+```{r}
+critcal_value = qf(0.95, 3, 3516)
+print(paste("Critical Value", critcal_value))
+```
+
+```{r}
+#TO determine the marginal effect of all the different predictors
+avPlots(full_model)
+```
