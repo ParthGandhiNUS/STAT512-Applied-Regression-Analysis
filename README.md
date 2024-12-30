@@ -17,3 +17,14 @@ Taken under instructor: Prof Qin Tiantian
 **Research Topic: Predicting College Basketball Win Rate**
 
 **Research Question tackled: Rebounds, Turnovers, and Free Throws have no impact on the win rate in a college basketball game**
+
+Dataset Used: https://www.kaggle.com/datasets/andrewsundberg/college-basketball-dataset
+
+Overall Dataset CSV: cbb.csv (From Dataset above)
+
+Report: Stat_512_Project_Cover_Page_Report_Appendix.pdf
+
+Other relevant Datasets: CollegeBBDataExcel.xlsx, CollegeBBData.csv (Transformed from cbb.csv - steps in the R Markdown)
+
+## Project Video 
+[![Watch the video](https://img.youtube.com/vi/8UHvg9MwNHw/maxresdefault.jpg)](https://youtu.be/8UHvg9MwNHw)
